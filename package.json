@@ -1,0 +1,13 @@
+{
+  "name": "passive-captcha",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace web",
+    "build:web": "npm run build --workspace web",
+    "preview:web": "npm run preview --workspace web"
+  }
+}

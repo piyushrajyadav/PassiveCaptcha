@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+  web:
+    image: node:24-bullseye
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: sh -c "npm install && npm run dev:web -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"

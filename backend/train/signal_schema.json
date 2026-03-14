@@ -1,0 +1,26 @@
+{
+  "session_fields": [
+    "sessionId",
+    "startedAt",
+    "visibilityChanges",
+    "firstInteractionAt",
+    "platform",
+    "userAgent",
+    "language",
+    "touchPoints",
+    "webglRenderer",
+    "canvasHash"
+  ],
+  "event_groups": ["pointer", "keyboard", "scroll"],
+  "feature_columns": [
+    "sampleCount",
+    "mouseSpeedMean",
+    "mouseLinearity",
+    "clickCount",
+    "scrollEvents",
+    "keyEvents",
+    "averageKeyInterval",
+    "visibilityChanges",
+    "timeToFirstInteractionMs"
+  ]
+}
