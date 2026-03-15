@@ -54,6 +54,8 @@ function hashCanvasFingerprint(): string {
 
 export class SignalCollector {
   private signals: PassiveSignals;
+  // tracks the timestamp of each keydown so we can compute hold duration on keyup
+  private pendingKeyDowns: Map<string, number> = new Map();
 
   constructor() {
     this.signals = {
@@ -63,6 +65,7 @@ export class SignalCollector {
       keyboard: [],
       scroll: [],
       visibilityChanges: 0,
+      visibilityChangeTimes: [],
       firstInteractionAt: null,
       screen: {
         width: window.screen.width,
@@ -73,12 +76,12 @@ export class SignalCollector {
         width: window.innerWidth,
         height: window.innerHeight
       },
-      platform: navigator.platform,
-      userAgent: navigator.userAgent,
-      language: navigator.language,
-      touchPoints: navigator.maxTouchPoints,
-      webglRenderer: getWebGLRenderer(),
-      canvasHash: hashCanvasFingerprint()
+      platform: navigator.platform || "unknown",
+      userAgent: navigator.userAgent || "unknown",
+      language: navigator.language || "unknown",
+      touchPoints: navigator.maxTouchPoints || 0,
+      webglRenderer: getWebGLRenderer() || "",
+      canvasHash: hashCanvasFingerprint() || ""
     };
   }
 
@@ -125,11 +128,19 @@ export class SignalCollector {
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      this.recordKeyboard({ key: event.key, t: Date.now(), type: "down" });
+      const t = Date.now();
+      // record the down timestamp so keyup can compute hold duration
+      this.pendingKeyDowns.set(event.key, t);
+      this.recordKeyboard({ key: event.key, t, type: "down" });
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
-      this.recordKeyboard({ key: event.key, t: Date.now(), type: "up" });
+      const t = Date.now();
+      const downTime = this.pendingKeyDowns.get(event.key);
+      // hold = ms the key was physically held; undefined if we missed the keydown
+      const hold = downTime !== undefined ? t - downTime : undefined;
+      this.pendingKeyDowns.delete(event.key);
+      this.recordKeyboard({ key: event.key, t, type: "up", hold });
     };
 
     const onScroll = () => {
@@ -137,7 +148,10 @@ export class SignalCollector {
     };
 
     const onVisibility = () => {
+      const t = Date.now();
       this.signals.visibilityChanges += 1;
+      // keep a full timestamp log so features.ts can compute inter-change timing
+      this.signals.visibilityChangeTimes.push(t);
     };
 
     window.addEventListener("mousemove", onPointerMove, { passive: true });
@@ -169,6 +183,7 @@ export class SignalCollector {
       pointer: [...this.signals.pointer],
       keyboard: [...this.signals.keyboard],
       scroll: [...this.signals.scroll],
+      visibilityChangeTimes: [...this.signals.visibilityChangeTimes],
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight

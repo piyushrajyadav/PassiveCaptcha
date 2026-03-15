@@ -1,0 +1,15 @@
+{
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownParameterType": "none",
+  "reportAny": "none",
+  "exclude": [
+    "train/**",
+    "**/__pycache__"
+  ]
+}
