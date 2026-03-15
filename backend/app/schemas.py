@@ -124,3 +124,14 @@ class InferenceResponse(BaseModel):
             "Positive values push toward 'human', negative toward 'bot'."
         ),
     )
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    email: str
+    displayName: str

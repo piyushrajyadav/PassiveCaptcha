@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { extractFeatures } from "./lib/features";
 import { scoreSession } from "./lib/inference";
 import { SignalCollector } from "./lib/signalCollector";
@@ -119,11 +119,13 @@ function ModelVoteCard({
   weight,
   score,
   accent,
+  pendingText,
 }: {
   label: string;
   weight: number;
   score: number | null | undefined;
   accent: "sky" | "violet" | "amber";
+  pendingText?: string;
 }) {
   const colors = {
     sky: {
@@ -181,7 +183,9 @@ function ModelVoteCard({
               : "review"}
           </p>
         ) : (
-          <p className="mt-1.5 text-xs text-slate-500">not trained yet — run training scripts</p>
+          <p className="mt-1.5 text-xs text-slate-500">
+            {pendingText ?? "model unavailable"}
+          </p>
         )}
       </div>
     </div>
@@ -197,9 +201,18 @@ export default function App() {
   const apiBaseUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
   const sessionTokenRef = useRef<string | null>(null);
   const [challengeSolved, setChallengeSolved] = useState(false);
+  const [email, setEmail] = useState("admin@admin.com");
+  const [password, setPassword] = useState("password");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [operatorName, setOperatorName] = useState<string>("Admin Operator");
 
   useEffect(() => {
-    // Phase 5 Enterprise Flow: Init session and get JWT
+    if (!isAuthenticated) {
+      return;
+    }
+
     const initSession = async () => {
       try {
         const res = await fetch(`${apiBaseUrl}/v1/init`, { method: "POST" });
@@ -252,7 +265,42 @@ export default function App() {
       cleanup();
       window.clearInterval(interval);
     };
-  }, [apiBaseUrl, challengeSolved]);
+  }, [apiBaseUrl, challengeSolved, isAuthenticated]);
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoggingIn(true);
+    setAuthError(null);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/v1/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Invalid email or password");
+      }
+
+      const payload = (await response.json()) as {
+        success: boolean;
+        email: string;
+        displayName: string;
+      };
+
+      setOperatorName(payload.displayName);
+      setIsAuthenticated(true);
+      setChallengeSolved(false);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to sign in");
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   const verdict = assessment?.verdict ?? "review";
   const score = assessment?.score ?? 0.5;
@@ -292,11 +340,14 @@ export default function App() {
         <header className="rounded-[2rem] border border-white/10 bg-white/5 px-8 py-7 shadow-2xl shadow-sky-950/30 backdrop-blur">
           <p className="text-sm uppercase tracking-[0.4em] text-sky-200/80">PassiveCaptcha</p>
           <h1 className="mt-3 font-serif text-4xl leading-tight text-white">
-            Invisible bot scoring — behavioral evidence, zero CAPTCHA friction.
+            {isAuthenticated
+              ? "Authenticated risk console — live passive trust scoring."
+              : "Admin access — sign in to view the live behavioral results console."}
           </h1>
           <p className="mt-3 max-w-3xl text-base text-slate-300">
-            Every mouse move, keystroke, scroll event, and browser fingerprint signal is analysed
-            passively by a three-model ensemble. The panels below update live as you interact.
+            {isAuthenticated
+              ? "Every mouse move, keystroke, scroll event, and browser fingerprint signal is analysed passively by a three-model ensemble. The panels below update live as you interact."
+              : "Use the seeded demo admin account to unlock the scoring console and session result page. Credentials are prefilled for this demo instance."}
           </p>
         </header>
 
@@ -305,83 +356,154 @@ export default function App() {
 
           {/* Demo login form */}
           <Card title="Demo interaction surface">
-            <p className="mb-5 text-sm text-slate-400">
-              Interact naturally — move your mouse, type, scroll. The engine scores your session
-              passively. No puzzles, no clicks required.
-            </p>
-            <form className="grid gap-4">
-              <div>
-                <label className="mb-2 block text-sm text-slate-300" htmlFor="email">
-                  Work email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="analyst@company.com"
-                  className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-slate-400 outline-none"
-                />
+            {isAuthenticated ? (
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                  <p className="text-xs uppercase tracking-[0.35em] text-emerald-300">
+                    Access granted
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">{operatorName}</h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    You are signed in as <span className="text-white">{email}</span>. The live
+                    risk result page is now unlocked below.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs text-slate-400">Session score</p>
+                    <p className={`mt-2 text-3xl font-semibold tabular-nums ${scoreColor}`}>
+                      {score.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs text-slate-400">Verdict</p>
+                    <p className="mt-2 text-3xl font-semibold text-white">{verdict}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs text-slate-400">Active flags</p>
+                    <p className="mt-2 text-3xl font-semibold text-white">{flagged.length}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="mb-2 block text-sm text-slate-300" htmlFor="password">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-slate-400 outline-none"
-                />
-              </div>
-              <button
-                type="button"
-                className="rounded-xl bg-sky-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-sky-200"
-              >
-                Continue
-              </button>
-            </form>
+            ) : (
+              <>
+                <p className="mb-5 text-sm text-slate-400">
+                  Seeded admin account stored in the backend SQLite demo database. Sign in to open
+                  the result page and start live session scoring.
+                </p>
+                <form className="grid gap-4" onSubmit={handleLogin}>
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300" htmlFor="email">
+                      Admin email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-slate-400 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300" htmlFor="password">
+                      Password
+                    </label>
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-slate-400 outline-none"
+                    />
+                  </div>
+                  <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+                    <p className="font-semibold uppercase tracking-[0.22em] text-sky-200">
+                      Demo Login Credentials
+                    </p>
+                    <p className="mt-2">
+                      Email: <span className="font-semibold text-white">admin@admin.com</span>
+                    </p>
+                    <p>
+                      Password: <span className="font-semibold text-white">password</span>
+                    </p>
+                  </div>
+                  {authError && (
+                    <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                      {authError}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isLoggingIn}
+                    className="rounded-xl bg-sky-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isLoggingIn ? "Signing in..." : "Sign in to console"}
+                  </button>
+                </form>
+              </>
+            )}
           </Card>
 
           {/* Live verdict */}
           <div className="space-y-4">
             <Card title="Live verdict">
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className={`text-7xl font-semibold tabular-nums ${scoreColor}`}>
-                    {score.toFixed(2)}
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className={`text-7xl font-semibold tabular-nums ${scoreColor}`}>
+                        {score.toFixed(2)}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        1 = definitely human · 0 = definitely bot
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold ${verdictColors[verdict]}`}
+                    >
+                      {verdict.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="mt-4">
+                    <ProgressBar value={score} max={1} danger={verdict === "bot"} />
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Ensemble ML scorer (RF + XGBoost + LSTM) when reachable · local heuristic
+                    fallback otherwise
                   </p>
-                  <p className="mt-2 text-xs text-slate-500">
-                    1 = definitely human · 0 = definitely bot
+                </>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <p className="text-sm text-slate-300">
+                    Sign in first. Once authenticated, this panel becomes the live result page
+                    showing the session trust score, verdict, flagged signals, and model
+                    breakdown.
                   </p>
                 </div>
-                <span
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold ${verdictColors[verdict]}`}
-                >
-                  {verdict.toUpperCase()}
-                </span>
-              </div>
-              <div className="mt-4">
-                <ProgressBar value={score} max={1} danger={verdict === "bot"} />
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                Ensemble ML scorer (RF + XGBoost + LSTM) when reachable · local heuristic fallback
-                otherwise
-              </p>
+              )}
             </Card>
 
             <Card title="Flagged signals">
-              <div className="flex flex-wrap gap-2">
-                {flagged.length > 0 ? (
-                  flagged.map((s) => <SignalBadge key={s} label={s} />)
-                ) : (
-                  <span className="text-sm text-slate-500">none — session looks clean</span>
-                )}
-              </div>
+              {isAuthenticated ? (
+                <div className="flex flex-wrap gap-2">
+                  {flagged.length > 0 ? (
+                    flagged.map((s) => <SignalBadge key={s} label={s} />)
+                  ) : (
+                    <span className="text-sm text-slate-500">none — session looks clean</span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Locked until admin authentication succeeds.
+                </p>
+              )}
             </Card>
           </div>
         </div>
 
         {/* ── Phase 2: Ensemble model breakdown ───────────────────────── */}
-        <Card title="Ensemble · three-model breakdown">
+        {isAuthenticated && <Card title="Ensemble · three-model breakdown">
           <p className="mb-5 text-sm text-slate-400">
             Three independent classifiers vote on P(human). Their probabilities are combined with
             fixed weights{" "}
@@ -396,18 +518,21 @@ export default function App() {
               weight={25}
               score={modelScores?.randomForest}
               accent="sky"
+              pendingText="model unavailable on backend"
             />
             <ModelVoteCard
               label="XGBoost (calibrated)"
               weight={45}
               score={modelScores?.xgboost}
               accent="violet"
+              pendingText="model unavailable on backend"
             />
             <ModelVoteCard
               label="LSTM (mouse sequence)"
               weight={30}
               score={modelScores?.lstm}
               accent="amber"
+              pendingText="waiting for mouse trajectory"
             />
           </div>
 
@@ -431,10 +556,10 @@ export default function App() {
               human ≥ 0.75 · review 0.45 – 0.75 · bot ≤ 0.45
             </p>
           </div>
-        </Card>
+        </Card>}
 
         {/* ── Phase 2: SHAP explainability ────────────────────────────── */}
-        <Card title="SHAP · feature contributions">
+        {isAuthenticated && <Card title="SHAP · feature contributions">
           <p className="mb-5 text-sm text-slate-400">
             SHAP (SHapley Additive exPlanations) shows which features pushed this session&apos;s
             score toward{" "}
@@ -474,10 +599,10 @@ export default function App() {
               </span>
             </div>
           )}
-        </Card>
+        </Card>}
 
         {/* ── Phase 1: Feature panels grid ─────────────────────────────── */}
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        {isAuthenticated && <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
 
           {/* Mouse dynamics */}
           <Card title="Mouse dynamics">
@@ -622,10 +747,10 @@ export default function App() {
               />
             </dl>
           </Card>
-        </div>
+        </div>}
 
         {/* ── Phase 1: Browser entropy panel ───────────────────────────── */}
-        <Card title="Browser entropy & fingerprint signals">
+        {isAuthenticated && <Card title="Browser entropy & fingerprint signals">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
 
             {/* WebGL */}
@@ -691,10 +816,10 @@ export default function App() {
               <p className="mt-1 text-xs text-slate-500">Headless / automation strings</p>
             </div>
           </div>
-        </Card>
+        </Card>}
 
           {/* ── Phase 4: Analytics Dashboard ─────────────────────────────────────────────────── */}
-          <AnalyticsDashboard assessment={assessment} features={features} />
+          {isAuthenticated && <AnalyticsDashboard assessment={assessment} features={features} />}
 
           {/* ── Footer ───────────────────────────────────────────────────────────── */}
           <footer className="pb-4 mt-8 text-center text-xs text-slate-600">
@@ -705,7 +830,7 @@ export default function App() {
       </main>
 
       {/* ── Phase 3: Challenge Overlay ───────────────────────────────────────────────────── */}
-      {!challengeSolved && verdict === "review" && (
+      {isAuthenticated && !challengeSolved && verdict === "review" && (
         <ChallengeOverlay onComplete={(success) => {
           if (success && assessment) {
             setChallengeSolved(true);

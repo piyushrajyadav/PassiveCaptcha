@@ -272,8 +272,7 @@ def prepare_lstm_input(payload: InferenceRequest) -> Any | None:
 
     Returns None when:
       • torch is not installed
-      • fewer than 5 move events were recorded (not enough for a meaningful
-        sequence inference)
+      • fewer than 2 move events were recorded (not enough to form a path)
     """
     if not _torch_available():
         return None
@@ -281,7 +280,7 @@ def prepare_lstm_input(payload: InferenceRequest) -> Any | None:
     points: list[tuple[float, float]] = [
         (s.x, s.y) for s in payload.pointer if s.type == "move"
     ]
-    if len(points) < 5:
+    if len(points) < 2:
         return None
 
     import torch  # noqa: PLC0415

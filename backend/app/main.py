@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
 import jwt
 
-from .schemas import InferenceRequest, InferenceResponse
+from .schemas import InferenceRequest, InferenceResponse, LoginRequest, LoginResponse
+from .services.auth import authenticate_user, seed_default_admin
 from .services.features import extract_features
 from .services.scoring import score_features
 
@@ -26,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+seed_default_admin()
 
 def verify_token(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -63,6 +66,20 @@ def init_session(request: Request):
     token = jwt.encode({"session_id": session_id, "exp": datetime.utcnow() + timedelta(hours=1)}, SECRET_KEY, algorithm=ALGORITHM)
     redis_store[session_id] = {"init_time": datetime.utcnow().isoformat(), "requests": 0}
     return {"token": token, "session_id": session_id}
+
+
+@app.post("/v1/login", response_model=LoginResponse)
+def login(payload: LoginRequest, request: Request) -> LoginResponse:
+    enforce_rate_limit(request)
+    user = authenticate_user(payload.email, payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    return LoginResponse(
+        success=True,
+        email=user["email"],
+        displayName=user["display_name"],
+    )
 
 @app.post("/v1/ingest", response_model=InferenceResponse)
 def ingest_session(payload: InferenceRequest, request: Request, session_id: str = Depends(verify_token)) -> InferenceResponse:
